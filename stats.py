@@ -1,26 +1,9 @@
-# Copyright (c) 2014 Adafruit Industries
-# Author: Tony DiCola
+#!/usr/bin/env python
 #
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
+# Script queries the CPU usage, temperature and RAM usage and 
+# displays the results visually using the 8x8 LED attached to the pi.
 
 from __future__ import division
-#from __future__ import print_function
 from subprocess import PIPE, Popen
 from PIL import Image
 from PIL import ImageDraw
@@ -31,7 +14,12 @@ from Adafruit_LED_Backpack import Matrix8x8
 import time
 import psutil
 
+# Constants
 time_delay = 0.2
+max_temp_diff = 30.0
+avg_temp = 55.0
+max_pixel_index = 7
+bar_width = 2
 font = ImageFont.load_default()
 
 # Create display instance on default I2C address (0x70) and bus number.
@@ -39,6 +27,7 @@ display = Matrix8x8.Matrix8x8()
 # Alternatively, create a display with a specific I2C address and/or bus.
 # display = Matrix8x8.Matrix8x8(address=0x74, busnum=1)
 
+# Writes a message of text to the display
 def writeMessage(text):
 	for letter in list(text):
 		# First create an 8x8 1 bit color image.
@@ -54,9 +43,10 @@ def writeMessage(text):
 		# Draw the buffer to the display hardware.
 		display.write_display()
 		
-		time.sleep(wait)
+		time.sleep(time_delay)
 		display.clear()
 
+# Creates a scrolling message of text
 def animateMessage(text):
         
         # Create image the size of the message
@@ -79,6 +69,7 @@ def animateMessage(text):
         # Display list of images
         display.animate(scroll,time_delay)
 
+# Draws a cross on the display
 def drawCross():
 	# First create an 8x8 1 bit color image.
 	image = Image.new('1', (8, 8))
@@ -99,82 +90,65 @@ def drawCross():
 	# Draw the buffer to the display hardware.
 	display.write_display()
 
-def drawBar(loc_x, height):
+# Draws a bar on the display with a width
+def drawBar(loc_x, bar_height, draw):
+    # Can't draw line of height 0 with a width of two, so draw some pixels instead
+    if bar_height == 0:
+        draw.point([loc_x, 0, loc_x + 1, 0], fill=255)
+    else:
+        # Draw a line with a given height and width.
+        draw.line((loc_x,0,loc_x,bar_height), fill=255, width = bar_width)
+
+# Gets the CPU temperature using vcgencmd
+def get_cpu_temperature():
+    process = Popen(['vcgencmd', 'measure_temp'], stdout=PIPE)
+    output, _error = process.communicate()
+    return float(output[output.index('=') + 1:output.rindex("'")])
+
+# Plots the CPU usage, temperature and RAM usage to the 8x8 LED display
+def plotStats():
+
+    # Get each stat.
+    cpu_temp = get_cpu_temperature()
+    cpu_usage = psutil.cpu_percent()
+    ram_usage = psutil.virtual_memory().percent
+    
+    # Convert each stat into a bar height
+    temp_bar_height = int(abs(cpu_temp - avg_temp) / max_temp_diff * max_pixel_index)
+    cpu_bar_height = int(cpu_usage / 100.0 * max_pixel_index)
+    ram_bar_height = int(ram_usage / 100.0 * max_pixel_index)
+    
     # First create an 8x8 1 bit color image.
     image = Image.new('1', (8, 8))
-	
+    
     # Then create a draw instance.
     draw = ImageDraw.Draw(image)
 
-    # Draw an X with two lines.
-    #draw.line((1,1,1,1 + height), fill=255, width = 2)
-    draw.line((loc_x,0,loc_x,height), fill=255, width = 2)
-    #draw.line((1,1,1,6), fill=255)
-    
+    # Draw each stat as a bar on the display.
+    drawBar(1,temp_bar_height,draw)
+    drawBar(3,cpu_bar_height,draw)
+    drawBar(5,ram_bar_height,draw)
+
+    #print "CPU temp: %f" % cpu_temp
+    #print "CPU usage: %f" % cpu_usage
+    #print "RAM usage: %f" % ram_usage
+
     # Draw the image on the display buffer.
     display.set_image(image)
     
     # Draw the buffer to the display hardware.
     display.write_display()
 
-def get_cpu_temperature():
-    process = Popen(['vcgencmd', 'measure_temp'], stdout=PIPE)
-    output, _error = process.communicate()
-    return float(output[output.index('=') + 1:output.rindex("'")])
-
 def main():
 
-    #max_temp = 85.0
-    max_temp = 30.0
-
-    #while(1):
-        #print "CPU temp: %f\r" % get_cpu_temperature()
-        #print "CPU usage: %f\r" % psutil.cpu_percent(),
-        #print "CPU temp: %f, CPU usage: %f\r" % (get_cpu_temperature(), psutil.cpu_percent()),
-        #print('CPU temp: '+str(get_cpu_temperature())+', CPU usage: '+str(psutil.cpu_percent()), end='\r')
-    
-    #ram = psutil.used_phymem()
-    #ram_total = ram.total / 2**20       # MiB.
-    #ram_used = ram.used / 2**20
-    #ram_free = ram.free / 2**20
-    #ram_percent_used = ram.percent
-    #
-    #disk = psutil.disk_usage('/')
-    #disk_total = disk.total / 2**30     # GiB.
-    #disk_used = disk.used / 2**30
-    #disk_free = disk.free / 2**30
-    #disk_percent_used = disk.percent
-    ## 
-    ## Print top five processes in terms of virtual memory usage.
-    ## 
-    #processes = sorted(
-    #    ((p.get_memory_info().vms, p) for p in psutil.process_iter()),
-    #    reverse=True
-    #)
-    #for virtual_memory, process in processes[:5]:
-    #    print virtual_memory // 2**20, process.pid, process.name
-    
     # Initialize the display. Must be called once before using the display.
     display.begin()
-   
+  
+    # Loop forever and update the display periodically
     while(1):
-        barsize = int(abs(get_cpu_temperature() - 55.0) / max_temp * 7)
-        print barsize
-        drawBar(1,barsize)
-        drawBar(3,barsize)
+        plotStats()
+        time.sleep(0.1)
 
-        #drawBar(get_cpu_temperature() / max_temp * 6)
-        time.sleep(0.5)
-    
-    for i in range(0,6):
-        drawBar(i)
-        time.sleep(0.5)
-    #animateMessage("SWIFT")
-    #writeMessage("54321")
-    #drawCross()
-    		
-    time.sleep(0.5)
-    		
     display.clear()
     display.write_display()
 
