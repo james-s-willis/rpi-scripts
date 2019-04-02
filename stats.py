@@ -16,8 +16,9 @@ import psutil
 
 # Constants
 time_delay = 0.2
-max_temp_diff = 30.0
-avg_temp = 55.0
+max_temp_diff = 20.0
+#avg_temp = 55.0
+avg_temp = 42.0
 max_pixel_index = 7
 bar_width = 2
 font = ImageFont.load_default()
@@ -91,14 +92,15 @@ def drawCross():
 	display.write_display()
 
 # Draws a bar on the display with a width
+# Transforms LED locations on display to correct orientation
 def drawBar(loc_x, bar_height, draw):
     # Can't draw line of height 0 with a width of two, so draw some pixels instead
     if bar_height == 0:
-        draw.point([loc_x, 0, loc_x + 1, 0], fill=255)
+        draw.point([max_pixel_index, loc_x, max_pixel_index, loc_x + 1], fill=255)
     else:
         # Draw a line with a given height and width.
-        draw.line((loc_x,0,loc_x,bar_height), fill=255, width = bar_width)
-
+        draw.line([(max_pixel_index,loc_x + 1),(max_pixel_index,loc_x)], fill=255, width = bar_height * 2)
+   
 # Gets the CPU temperature using vcgencmd
 def get_cpu_temperature():
     process = Popen(['vcgencmd', 'measure_temp'], stdout=PIPE)
@@ -125,9 +127,9 @@ def plotStats():
     draw = ImageDraw.Draw(image)
 
     # Draw each stat as a bar on the display.
-    drawBar(1,temp_bar_height,draw)
-    drawBar(3,cpu_bar_height,draw)
-    drawBar(5,ram_bar_height,draw)
+    drawBar(1,ram_bar_height,draw)
+    drawBar(3,temp_bar_height,draw)
+    drawBar(5,cpu_bar_height,draw)
 
     #print "CPU temp: %f" % cpu_temp
     #print "CPU usage: %f" % cpu_usage
